@@ -1,5 +1,7 @@
 # workerpool
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/alesr/workerpool.git.svg)](https://pkg.go.dev/github.com/alesr/workerpool.git)
+
 Generic, type-safe handy worker pool in Go.
 
 ## Install
