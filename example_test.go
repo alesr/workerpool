@@ -44,6 +44,8 @@ func Example() {
 		pool.Submit(task)
 	}
 
+	pool.Shutdown()
+
 	fmt.Printf("Body count: %d\n", bodyCount.Load())
 	// Output:
 	// Body count: 3
