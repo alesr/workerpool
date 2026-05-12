@@ -7,30 +7,24 @@ import (
 	"sync/atomic"
 )
 
-// Input wraps a task's execution.
-type Input interface {
+// Task defines the interface for a task to be executed by a worker pool.
+type Task interface {
 	Do(context.Context)
 }
 
-// Task bundles a function with its input.
-type Task[T Input] struct {
-	Fn    func(T)
-	Input T
-}
-
 // Option configures a Pool.
-type Option[T Input] func(*Pool[T])
+type Option[T Task] func(*Pool[T])
 
 // WithBuffer sets the task channel buffer size.
-func WithBuffer[T Input](size int) Option[T] {
+func WithBuffer[T Task](size int) Option[T] {
 	return func(p *Pool[T]) {
 		p.buffer = size
 	}
 }
 
 // Pool maintains fixed worker goroutines processing tasks from a channel.
-type Pool[T Input] struct {
-	tasks  chan Task[T]   // channel for tasks waiting to be processed
+type Pool[T Task] struct {
+	tasks  chan T         // channel for tasks waiting to be processed
 	buffer int            // size of the task channel
 	wg     sync.WaitGroup // wait group for worker goroutines
 
@@ -47,7 +41,7 @@ type Pool[T Input] struct {
 // New creates a pool with numOfWorkers workers.
 // The context can be used to stop the pool immediately, skipping any buffered
 // tasks. In-flight tasks will still run to completion.
-func New[T Input](ctx context.Context, numOfWorkers int, opts ...Option[T]) *Pool[T] {
+func New[T Task](ctx context.Context, numOfWorkers int, opts ...Option[T]) *Pool[T] {
 	if numOfWorkers <= 0 {
 		numOfWorkers = 1
 	}
@@ -64,7 +58,7 @@ func New[T Input](ctx context.Context, numOfWorkers int, opts ...Option[T]) *Poo
 		opt(p)
 	}
 
-	p.tasks = make(chan Task[T], p.buffer)
+	p.tasks = make(chan T, p.buffer)
 
 	p.wg.Add(numOfWorkers)
 	for range numOfWorkers {
@@ -86,20 +80,20 @@ func (p *Pool[T]) worker() {
 			for {
 				select {
 				case task := <-p.tasks:
-					task.Fn(task.Input)
+					task.Do(p.ctx)
 				default:
 					return
 				}
 			}
 		case task := <-p.tasks:
-			task.Fn(task.Input)
+			task.Do(p.ctx)
 		}
 	}
 }
 
 // Submit sends a task to the pool. Blocks if the task channel is full.
 // Returns false if the pool is shutting down or the context was cancelled.
-func (p *Pool[T]) Submit(task Task[T]) bool {
+func (p *Pool[T]) Submit(task T) bool {
 	select {
 	case <-p.ctx.Done(): // forcefully terminate via ctx
 		return false
