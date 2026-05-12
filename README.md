@@ -21,33 +21,30 @@ type bazooka struct {
 	bodyCount *atomic.Int32
 }
 
-// Do simulate some bazooking, and
-// implement the generic constraint
-func (b bazooka) Do(ctx context.Context) {
+// Do simulate some bazooking
+func (b *bazooka) Do(ctx context.Context) {
 	b.ammo--
 	fmt.Fprintln(os.Stderr, "bazooking: "+b.targetID)
 	b.bodyCount.Add(1)
 }
 
-...
-pool := workerpool.New[bazooka](3)
-defer pool.Shutdown()
+func main() {
+	pool := workerpool.New[*bazooka](context.TODO(), 3)
 
-var bodyCount atomic.Int32
-
-bazookas := []bazooka{
-	{ammo: 69, targetID: "foo-id", bodyCount: &bodyCount},
-	{ammo: 42, targetID: "bar-id", bodyCount: &bodyCount},
-	{ammo: 11, targetID: "qux-id", bodyCount: &bodyCount},
-}
-
-for _, bazz := range bazookas {
-	task := workerpool.Task[bazooka]{
-		Fn: func(input bazooka) {
-			input.Do(context.TODO())
-		},
-		Input: bazz,
+	var bodyCount atomic.Int32
+	
+	bazookas := []bazooka{
+		{ammo: 69, targetID: "foo-id", bodyCount: &bodyCount},
+		{ammo: 42, targetID: "bar-id", bodyCount: &bodyCount},
+		{ammo: 11, targetID: "qux-id", bodyCount: &bodyCount},
 	}
-	pool.Submit(task)
+	
+	for i := range bazookas {
+		pool.Submit(context.TODO(), &bazookas[i])
+	}
+	
+	_ = pool.GracefulShutdown()
+	
+	fmt.Printf("Body count: %d\n", bodyCount.Load())	
 }
 ```

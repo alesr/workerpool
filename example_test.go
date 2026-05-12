@@ -35,8 +35,8 @@ func Example() {
 		{ammo: 11, targetID: "qux-id", bodyCount: &bodyCount},
 	}
 
-	for _, bazz := range bazookas {
-		pool.Submit(&bazz)
+	for i := range bazookas {
+		pool.Submit(context.TODO(), &bazookas[i])
 	}
 
 	if err := pool.GracefulShutdown(); err != nil {
