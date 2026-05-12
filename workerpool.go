@@ -12,6 +12,11 @@ type Task interface {
 	Do(context.Context)
 }
 
+type entry[T Task] struct {
+	ctx context.Context
+	job T
+}
+
 // Option configures a Pool.
 type Option[T Task] func(*Pool[T])
 
@@ -24,9 +29,9 @@ func WithBuffer[T Task](size int) Option[T] {
 
 // Pool maintains fixed worker goroutines processing tasks from a channel.
 type Pool[T Task] struct {
-	tasks  chan T         // channel for tasks waiting to be processed
-	buffer int            // size of the task channel
-	wg     sync.WaitGroup // wait group for worker goroutines
+	entries chan entry[T]  // channel for jobs waiting to be processed
+	buffer  int            // size of the task channel
+	wg      sync.WaitGroup // wait group for worker goroutines
 
 	// immediate termination
 	ctx            context.Context
@@ -38,18 +43,18 @@ type Pool[T Task] struct {
 	shutdownOnce sync.Once
 }
 
-// New creates a pool with numOfWorkers workers.
+// New creates a pool with number of available workers.
 // The context can be used to stop the pool immediately, skipping any buffered
 // tasks. In-flight tasks will still run to completion.
-func New[T Task](ctx context.Context, numOfWorkers int, opts ...Option[T]) *Pool[T] {
-	if numOfWorkers <= 0 {
-		numOfWorkers = 1
+func New[T Task](ctx context.Context, workers int, opts ...Option[T]) *Pool[T] {
+	if workers <= 0 {
+		workers = 1
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
+	poolCtx, cancel := context.WithCancel(ctx)
 
 	p := &Pool[T]{
-		ctx:    ctx,
+		ctx:    poolCtx,
 		cancel: cancel,
 		stop:   make(chan struct{}),
 	}
@@ -58,10 +63,10 @@ func New[T Task](ctx context.Context, numOfWorkers int, opts ...Option[T]) *Pool
 		opt(p)
 	}
 
-	p.tasks = make(chan T, p.buffer)
+	p.entries = make(chan entry[T], p.buffer)
 
-	p.wg.Add(numOfWorkers)
-	for range numOfWorkers {
+	p.wg.Add(workers)
+	for range workers {
 		go p.worker()
 	}
 	return p
@@ -79,27 +84,29 @@ func (p *Pool[T]) worker() {
 			// drain remaining buffered tasks before exiting
 			for {
 				select {
-				case task := <-p.tasks:
-					task.Do(p.ctx)
+				case entry := <-p.entries:
+					entry.job.Do(entry.ctx)
 				default:
 					return
 				}
 			}
-		case task := <-p.tasks:
-			task.Do(p.ctx)
+		case entry := <-p.entries:
+			entry.job.Do(entry.ctx)
 		}
 	}
 }
 
 // Submit sends a task to the pool. Blocks if the task channel is full.
 // Returns false if the pool is shutting down or the context was cancelled.
-func (p *Pool[T]) Submit(task T) bool {
+func (p *Pool[T]) Submit(ctx context.Context, task T) bool {
 	select {
+	case <-ctx.Done():
+		return false
 	case <-p.ctx.Done(): // forcefully terminate via ctx
 		return false
 	case <-p.stop: // terminated via graceful shutdown
 		return false
-	case p.tasks <- task:
+	case p.entries <- entry[T]{ctx: ctx, job: task}:
 		return true
 	}
 }
