@@ -16,35 +16,42 @@ type bazooka struct {
 }
 
 // Do simulate some bazooking
-func (b bazooka) Do(ctx context.Context) {
+func (b *bazooka) Do(ctx context.Context) {
 	b.ammo--
 	fmt.Fprintln(os.Stderr, "bazooking: "+b.targetID)
 	b.bodyCount.Add(1)
 }
 
 func Example() {
-	pool := workerpool.New[bazooka](3)
-	defer pool.Shutdown()
+	// starts a pool with 3 workers
+	// use the context to cancel the pool without waiting for buffered tasks to complete
+	pool := workerpool.New[*bazooka](context.TODO(), 3)
 
 	var bodyCount atomic.Int32
 
+	// list of tasks to perform
 	bazookas := []bazooka{
 		{ammo: 69, targetID: "foo-id", bodyCount: &bodyCount},
 		{ammo: 42, targetID: "bar-id", bodyCount: &bodyCount},
 		{ammo: 11, targetID: "qux-id", bodyCount: &bodyCount},
 	}
 
+	// loop over the tasks initializing and
+	// submitting the tasks to the pool
+
 	for _, bazz := range bazookas {
-		task := workerpool.Task[bazooka]{
-			Fn: func(input bazooka) {
+		task := workerpool.Task[*bazooka]{
+			Fn: func(input *bazooka) {
 				input.Do(context.TODO())
 			},
-			Input: bazz,
+			Input: &bazz,
 		}
 		pool.Submit(task)
 	}
 
-	pool.Shutdown()
+	if err := pool.GracefulShutdown(); err != nil {
+		fmt.Fprintf(os.Stderr, "shutdown error: %v\n", err)
+	}
 
 	fmt.Printf("Body count: %d\n", bodyCount.Load())
 	// Output:
