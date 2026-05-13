@@ -2,6 +2,7 @@ package workerpool
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -36,7 +37,7 @@ func TestNew(t *testing.T) {
 			counter: &counter,
 		}
 
-		if !pool.Submit(context.TODO(), task) {
+		if err := pool.Submit(context.TODO(), task); err != nil {
 			t.Error("failed to submit task")
 		}
 
@@ -64,7 +65,7 @@ func TestPool_WithBuffer(t *testing.T) {
 			counter: &counter,
 		}
 
-		if !pool.Submit(context.TODO(), task) {
+		if err := pool.Submit(context.TODO(), task); err != nil {
 			t.Error("failed to submit task")
 		}
 	}
@@ -94,7 +95,7 @@ func TestPool_Submit(t *testing.T) {
 				counter: &counter,
 			}
 
-			if !pool.Submit(context.TODO(), task) {
+			if err := pool.Submit(context.TODO(), task); err != nil {
 				t.Error("failed to submit task")
 			}
 		}
@@ -330,7 +331,7 @@ func TestPool_GracefulShutdown(t *testing.T) {
 				},
 			}
 
-			if !pool.Submit(context.TODO(), task1) {
+			if err := pool.Submit(context.TODO(), task1); err != nil {
 				t.Error("expected Submit to return true")
 			}
 
@@ -351,9 +352,15 @@ func TestPool_GracefulShutdown(t *testing.T) {
 				counter: &counter,
 			}
 
-			if pool.Submit(context.TODO(), task2) {
-				t.Error("expected Submit to return false after shutdown")
+			err := pool.Submit(context.TODO(), task2)
+			if err == nil {
+				t.Error("expected Submit to return error after shutdown")
 			}
+
+			if !errors.Is(err, ErrPoolClosed) {
+				t.Errorf("expected error to be %v, got %v", ErrPoolClosed, err)
+			}
+
 			close(blocker)
 
 			if err := <-shutdownDone; err != nil {
