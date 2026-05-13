@@ -6,6 +6,15 @@
 
 Generic, type-safe handy worker pool in Go.
 
+
+It executes tasks using a fixed number of worker goroutines passed to the pool constructor.
+
+Task submission is coordinated through a buffered channel. The buffer size is configurable and defines the maximum number of tasks that can be queued before backpressure is applied. When the buffer is full, `Submit` blocks until capacity becomes available.
+
+The pool supports both immediate cancellation via context and graceful shutdown.
+
+Immediate cancellation stops workers and drops queued tasks that have not yet started execution, while graceful shutdown drains all queued tasks and waits for completion. In both cases, in-flight tasks are allowed to complete.
+
 ## Install
 
 ```bash
