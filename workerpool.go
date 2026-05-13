@@ -87,6 +87,8 @@ func (p *Pool[T]) worker() {
 				case entry := <-p.entries:
 					entry.job.Do(entry.ctx)
 				default:
+					// channel is empty. since p.stop is closed,
+					// no more tasks can be submitted
 					return
 				}
 			}
@@ -115,15 +117,19 @@ func (p *Pool[T]) Submit(ctx context.Context, task T) bool {
 // and waits for in-flight tasks to complete before returning.
 // Returns an error if the ctx was cancelled before shutdown completed.
 func (p *Pool[T]) GracefulShutdown() error {
-	p.shutdownOnce.Do(func() {
-		close(p.stop)
-	})
-
-	p.wg.Wait()
-	p.cancel()
-
 	if p.ungracefulStop.Load() {
 		return errors.New("pool was forcefully terminated before shutdown")
 	}
+
+	p.shutdownOnce.Do(func() {
+		close(p.stop)
+		p.wg.Wait()
+		p.cancel()
+
+		// only close(p.entries) with a lock here and
+		// a read lock in Submit otherwise senders will panic =]
+		// but it's just a good to have, since p.stop is closed
+		// and submit already checks for that
+	})
 	return nil
 }

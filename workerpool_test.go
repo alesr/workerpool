@@ -88,8 +88,6 @@ func TestPool_Submit(t *testing.T) {
 		pool := New[testTask](context.TODO(), 3)
 
 		var counter atomic.Int32
-
-		// submit tasks
 		for i := 1; i <= 10; i++ {
 			task := testTask{
 				value:   i,
@@ -318,23 +316,50 @@ func TestPool_GracefulShutdown(t *testing.T) {
 	t.Run("Submit task after graceful shutdown", func(t *testing.T) {
 		t.Parallel()
 
-		pool := New[testTask](context.TODO(), 2)
+		synctest.Test(t, func(t *testing.T) {
+			pool := New[testTask](context.TODO(), 2)
 
-		// immediately shutdown the pool
-		if err := pool.GracefulShutdown(); err != nil {
-			t.Errorf("shutdown error: %v", err)
-		}
+			var counter atomic.Int32
+			blocker := make(chan struct{})
 
-		var counter atomic.Int32
+			task1 := testTask{
+				value:   1,
+				counter: &counter,
+				fn: func(context.Context) {
+					<-blocker
+				},
+			}
 
-		task := testTask{
-			value:   1,
-			counter: &counter,
-		}
+			if !pool.Submit(context.TODO(), task1) {
+				t.Error("expected Submit to return true")
+			}
 
-		if pool.Submit(context.TODO(), task) {
-			t.Error("expected Submit to return false after shutdown")
-		}
+			// wait for worker to pick up the task and block
+			synctest.Wait()
+
+			// immediately shutdown the pool
+			// will close(p.stop) but block on p.wg.Wait()
+			shutdownDone := make(chan error, 1)
+			go func() {
+				shutdownDone <- pool.GracefulShutdown()
+			}()
+
+			synctest.Wait() // wait shutdown to propagate
+
+			task2 := testTask{
+				value:   1,
+				counter: &counter,
+			}
+
+			if pool.Submit(context.TODO(), task2) {
+				t.Error("expected Submit to return false after shutdown")
+			}
+			close(blocker)
+
+			if err := <-shutdownDone; err != nil {
+				t.Errorf("shutdown error: %v", err)
+			}
+		})
 	})
 
 	t.Run("Graceful shutdown waits for all queued tasks to be complete", func(t *testing.T) {
