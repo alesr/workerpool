@@ -98,18 +98,23 @@ func (p *Pool[T]) worker() {
 	}
 }
 
+var (
+	ErrPoolClosed    = errors.New("pool is closed")
+	ErrTaskCancelled = errors.New("task context cancelled")
+)
+
 // Submit sends a task to the pool. Blocks if the task channel is full.
 // Returns false if the pool is shutting down or the context was cancelled.
-func (p *Pool[T]) Submit(ctx context.Context, task T) bool {
+func (p *Pool[T]) Submit(ctx context.Context, task T) error {
 	select {
 	case <-ctx.Done():
-		return false
+		return ErrTaskCancelled
 	case <-p.ctx.Done(): // forcefully terminate via ctx
-		return false
+		return ErrPoolClosed
 	case <-p.stop: // terminated via graceful shutdown
-		return false
+		return ErrPoolClosed
 	case p.entries <- entry[T]{ctx: ctx, job: task}:
-		return true
+		return nil
 	}
 }
 

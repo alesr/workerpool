@@ -36,7 +36,7 @@ func Example() {
 	}
 
 	for i := range bazookas {
-		pool.Submit(context.TODO(), &bazookas[i])
+		_ = pool.Submit(context.TODO(), &bazookas[i])
 	}
 
 	if err := pool.GracefulShutdown(); err != nil {

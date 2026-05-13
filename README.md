@@ -49,7 +49,7 @@ func main() {
 	}
 	
 	for i := range bazookas {
-		pool.Submit(context.TODO(), &bazookas[i])
+		_ = pool.Submit(context.TODO(), &bazookas[i])
 	}
 	
 	_ = pool.GracefulShutdown()
