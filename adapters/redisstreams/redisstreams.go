@@ -1,4 +1,4 @@
-package redisstream
+package redisstreams
 
 import (
 	"context"
