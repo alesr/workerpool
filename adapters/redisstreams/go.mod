@@ -1,6 +1,6 @@
-module github.com/alesr/workerpool/adapters/redisstream
+module github.com/alesr/workerpool/adapters/redisstreams
 
-go 1.26
+go 1.26.1
 
 require github.com/redis/go-redis/v9 v9.19.0
 
