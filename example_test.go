@@ -22,10 +22,32 @@ func (b *bazooka) Do(ctx context.Context) {
 	b.bodyCount.Add(1)
 }
 
-func Example() {
-	// starts a pool with 3 workers
-	// use the context to cancel the pool without waiting for buffered tasks to complete
+func Example_bounded() {
 	pool := workerpool.New[*bazooka](context.TODO(), 3)
+
+	var bodyCount atomic.Int32
+
+	bazookas := []bazooka{
+		{ammo: 69, targetID: "foo-id", bodyCount: &bodyCount},
+		{ammo: 42, targetID: "bar-id", bodyCount: &bodyCount},
+		{ammo: 11, targetID: "qux-id", bodyCount: &bodyCount},
+	}
+
+	for i := range bazookas {
+		_ = pool.Submit(context.TODO(), &bazookas[i])
+	}
+
+	if err := pool.GracefulShutdown(); err != nil {
+		fmt.Fprintf(os.Stderr, "shutdown error: %v\n", err)
+	}
+
+	fmt.Printf("Body count: %d\n", bodyCount.Load())
+	// Output:
+	// Body count: 3
+}
+
+func Example_unbounded() {
+	pool := workerpool.New(context.TODO(), 3, workerpool.WithUnboundedQueue[*bazooka]())
 
 	var bodyCount atomic.Int32
 
