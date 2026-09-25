@@ -1,7 +1,8 @@
 name: modernize
 on:
+  workflow_dispatch:
   schedule:
-    - cron: "5 9 * * 5"
+    - cron: "20 9 * * 5"
 permissions:
   contents: write
   pull-requests: write
@@ -9,6 +10,7 @@ jobs:
   modernize:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: alesr/gomodern@v1
         with:
           mode: fix
