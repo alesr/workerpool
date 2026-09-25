@@ -1,8 +1,15 @@
 name: modernize
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "20 9 * * 5"
+    inputs:
+      mode:
+        description: "Execution mode"
+        required: true
+        default: "fix"
+        type: choice
+        options:
+          - fix
+          - check
 permissions:
   contents: write
   pull-requests: write
@@ -13,5 +20,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: alesr/gomodern@v1
         with:
-          mode: fix
+          mode: ${{ inputs.mode || 'fix' }}
           create-pr: "true"
