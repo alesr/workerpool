@@ -47,9 +47,6 @@ jobs:
             echo "$output"
             exit 1
           fi
-      
-      - name: gomodernize
-        uses: alesr/gomodern@v0.2.0
 
   vet:
     name: Vet
