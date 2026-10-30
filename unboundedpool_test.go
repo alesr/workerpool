@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
+	"time"
 )
 
 func TestPool_Unbounded(t *testing.T) {
@@ -184,14 +185,12 @@ func TestPool_Unbounded_TryDoIngressFull(t *testing.T) {
 	var wg sync.WaitGroup
 	start := make(chan struct{})
 	for range 500 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			if _, err := pool.TryDo(context.Background(), testTask{value: 1}); errors.Is(err, ErrQueueFull) {
 				queueFull.Add(1)
 			}
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()
@@ -203,6 +202,81 @@ func TestPool_Unbounded_TryDoIngressFull(t *testing.T) {
 	if queueFull.Load() == 0 {
 		t.Error("expected at least one ErrQueueFull from concurrent TryDo on full ingress")
 	}
+}
+
+// TestUnboundedPool_DrainVsContextCancel verifies that cancelling the pool
+// context while GracefulShutdown is draining the broker queue does not hang:
+// the broker must abandon the remaining queue instead of blocking on dispatch
+// once workers have exited. Abandoned entries never start, so their callers
+// get ErrPoolClosed; the in-flight task still completes.
+func TestUnboundedPool_DrainVsContextCancel(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		pool := New[int](ctx, 1, WithUnboundedQueue(), WithIngressBuffer(60))
+
+		blocker := make(chan struct{})
+
+		// task1 occupies the only worker and blocks inside the task.
+		task1Err := make(chan error, 1)
+		go func() {
+			_, err := pool.Do(context.Background(), testTask{
+				fn:    func(_ context.Context) { <-blocker },
+				value: 1,
+			})
+			task1Err <- err
+		}()
+		synctest.Wait()
+
+		// queue many tasks behind the blocked worker; they land in ingress
+		// and the broker's slice. with dispatch capacity 1, the pre-fix drain
+		// loop blocks on the second send forever once the context is cancelled.
+		const queued = 50
+		errs := make(chan error, queued)
+		for range queued {
+			go func() {
+				_, err := pool.Do(context.Background(), testTask{value: 1})
+				errs <- err
+			}()
+		}
+		synctest.Wait()
+
+		// begin graceful shutdown: closes ingress, broker starts draining
+		shutdownDone := make(chan error, 1)
+		go func() {
+			shutdownDone <- pool.GracefulShutdown()
+		}()
+		synctest.Wait()
+
+		// cancel the pool context mid-drain while the worker is still busy,
+		// so no queued entry can start: all queued callers must get ErrPoolClosed
+		cancel()
+		synctest.Wait()
+
+		for range queued {
+			if err := <-errs; !errors.Is(err, ErrPoolClosed) {
+				t.Errorf("queued task: expected ErrPoolClosed, got %v", err)
+			}
+		}
+
+		// release the worker; shutdown must now complete instead of hanging
+		close(blocker)
+		synctest.Wait()
+
+		select {
+		case err := <-shutdownDone:
+			if err != nil {
+				t.Errorf("unexpected shutdown error: %v", err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("GracefulShutdown hung after pool context cancelled mid-drain")
+		}
+
+		if err := <-task1Err; err != nil {
+			t.Errorf("in-flight task1: expected nil error, got %v", err)
+		}
+	})
 }
 
 func TestUnboundedPool_BrokerDrainOnShutdown(t *testing.T) {

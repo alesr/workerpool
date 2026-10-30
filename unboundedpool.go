@@ -76,12 +76,19 @@ func (p *unboundedPool[T]) broker() {
 		case e, ok := <-p.ingress:
 			if !ok {
 				// intake closed after the submitMu barrier, so no more sends
-				// the channel yields any remaining buffered entries (ok=true)
-				// before this !ok branch, so queue now holds everything.
-				// drain all queued entries to dispatch. this must complete even
-				// if context is cancelled, as workers are still running
+				// can arrive: the channel yields any remaining buffered entries
+				// (ok=true) before this !ok branch, so queue now holds everything.
+				// drain queued entries to dispatch, but stop if the pool context
+				// is cancelled mid-drain: workers exit on ctx.Done and would
+				// never receive, hanging this send forever. abandoned entries
+				// never start, so their callers get ErrPoolClosed.
 				for _, e := range queue {
-					p.dispatch <- e
+					select {
+					case p.dispatch <- e:
+					case <-p.ctx.Done():
+						close(p.dispatch)
+						return
+					}
 				}
 				close(p.dispatch)
 				return
