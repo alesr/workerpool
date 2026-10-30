@@ -75,7 +75,16 @@ func (a *StreamAdapter) Initialize(ctx context.Context, offset string) error {
 	return nil
 }
 
-// Consume replaces FetchTasks injecting tasks directly into the handler.
+// Consume reads messages from the stream via the consumer group and injects
+// each into handler.Submit. It blocks until ctx is cancelled.
+//
+// Limitations:
+//   - No pending-entry reclaim: if the consumer crashes after XReadGroup but
+//     before the ack callback runs, the message stays in the group's pending
+//     entries list (PEL) indefinitely. Use XAUTOCLAIM/XPENDING externally to
+//     reclaim stale messages from dead consumers.
+//   - Only string field values are surfaced in the payload map; non-string
+//     values (numbers, booleans, nested objects) are silently dropped.
 func (a *StreamAdapter) Consume(ctx context.Context, handler TaskHandler) {
 	for {
 		select {

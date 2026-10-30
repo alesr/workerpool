@@ -15,15 +15,15 @@ type bazooka struct {
 	bodyCount *atomic.Int32
 }
 
-// Do simulate some bazooking
-func (b *bazooka) Do(ctx context.Context) {
+func (b *bazooka) Do(ctx context.Context) (int, error) {
 	b.ammo--
 	fmt.Fprintln(os.Stderr, "bazooking: "+b.targetID)
 	b.bodyCount.Add(1)
+	return int(b.ammo), nil
 }
 
 func Example_bounded() {
-	pool := workerpool.New[*bazooka](context.TODO(), 3)
+	pool := workerpool.New[int](context.TODO(), 3)
 
 	var bodyCount atomic.Int32
 
@@ -34,7 +34,7 @@ func Example_bounded() {
 	}
 
 	for i := range bazookas {
-		_ = pool.Submit(context.TODO(), &bazookas[i])
+		pool.Do(context.TODO(), &bazookas[i])
 	}
 
 	if err := pool.GracefulShutdown(); err != nil {
@@ -47,7 +47,7 @@ func Example_bounded() {
 }
 
 func Example_unbounded() {
-	pool := workerpool.New(context.TODO(), 3, workerpool.WithUnboundedQueue[*bazooka]())
+	pool := workerpool.New[int](context.TODO(), 3, workerpool.WithUnboundedQueue())
 
 	var bodyCount atomic.Int32
 
@@ -58,7 +58,7 @@ func Example_unbounded() {
 	}
 
 	for i := range bazookas {
-		_ = pool.Submit(context.TODO(), &bazookas[i])
+		pool.Do(context.TODO(), &bazookas[i])
 	}
 
 	if err := pool.GracefulShutdown(); err != nil {
