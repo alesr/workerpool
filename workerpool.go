@@ -52,8 +52,8 @@ type Pool[T any] interface {
 	TryDo(ctx context.Context, task Task[T]) (T, error)
 
 	// GracefulShutdown rejects new tasks, drains queued tasks, and waits for
-	// in-flight tasks to finish. Note: Tasks already running will complete even
-	// if their context is still active.
+	// in-flight tasks to finish. Running tasks are not cancelled: they run to
+	// completion even if the pool context has already been cancelled.
 	GracefulShutdown() error
 
 	// IsClosed returns true if the pool has been shut down via GracefulShutdown
@@ -132,10 +132,9 @@ type poolCore[T any] struct {
 
 	closeQueue func() // set by the concrete pool: stops intake + flushes backlog
 
-	wg            sync.WaitGroup
-	shutdownOnce  sync.Once
-	shutdownErr   error      // persists error from GracefulShutdown
-	shutdownErrMu sync.Mutex // guards shutdownErr
+	wg           sync.WaitGroup
+	shutdownOnce sync.Once
+	shutdownErr  error // persists error from GracefulShutdown; written under shutdownOnce
 }
 
 // New creates a worker pool with a default buffer size equal to the number
@@ -320,9 +319,7 @@ func (p *poolCore[T]) GracefulShutdown() error {
 		// Check if the pool was already forcefully terminated
 		// (context cancelled before GracefulShutdown was called).
 		if err := p.ctx.Err(); err != nil {
-			p.shutdownErrMu.Lock()
 			p.shutdownErr = fmt.Errorf("workerpool: pool was forcefully terminated before shutdown: %w", err)
-			p.shutdownErrMu.Unlock()
 			// Still wait for in-flight tasks to complete, maintaining the API contract
 			// that GracefulShutdown waits for in-flight tasks to finish.
 			p.wg.Wait()
@@ -337,8 +334,6 @@ func (p *poolCore[T]) GracefulShutdown() error {
 		p.cancel()
 	})
 
-	p.shutdownErrMu.Lock()
-	defer p.shutdownErrMu.Unlock()
 	return p.shutdownErr
 }
 
