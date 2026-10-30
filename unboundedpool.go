@@ -79,11 +79,7 @@ func (p *unboundedPool[T]) broker() {
 			}
 
 			for _, e := range queue {
-				select {
-				case <-p.ctx.Done():
-					return
-				case p.dispatch <- e:
-				}
+				p.dispatch <- e
 			}
 			close(p.dispatch)
 			return

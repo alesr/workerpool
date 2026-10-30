@@ -87,6 +87,7 @@ func New[T Task](ctx context.Context, workers int, opts ...Option[T]) Pool[T] {
 // and waits for in-flight tasks to complete before returning.
 func (p *poolCore[T]) GracefulShutdown() error {
 	if p.ungracefulStop.Load() {
+		p.wg.Wait()
 		return errors.New("pool was forcefully terminated before shutdown")
 	}
 
