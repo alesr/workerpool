@@ -108,10 +108,12 @@ func WithUnboundedQueue() Option {
 }
 
 // WithIngressBuffer sets the ingress channel buffer size for an unbounded pool.
-// Larger values reduce the chance of TryDo returning ErrQueueFull but use more memory.
-// Default: workers * 50. Pass a very large value (e.g., math.MaxInt) for effectively
-// unbounded submission, at the cost of potentially unbounded memory usage.
-// Note: Passing 0 or not calling this function uses the default size (workers * 50).
+// The ingress is only a bounded handoff to the broker goroutine — the queue
+// itself (the broker's in-memory slice) is unbounded regardless of this size.
+// Larger values let producers run further ahead of the broker before Do blocks
+// or TryDo returns ErrQueueFull, at the cost of more memory. Note that channel
+// buffers are allocated eagerly, so absurdly large sizes will panic or OOM.
+// Default: workers * 50. Passing 0 or a negative value selects the default.
 func WithIngressBuffer(size int) Option {
 	return func(cfg *config) {
 		if size < 0 {
