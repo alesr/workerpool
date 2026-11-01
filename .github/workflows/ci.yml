@@ -10,94 +10,32 @@ permissions:
   contents: read
 
 jobs:
-  deps:
-    name: Dependencies
+  ci:
+    name: Ultimate CI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Run Ultimate CI
+        id: ultimate-ci
+        uses: alesr/ultimate-ci@v1
         with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Download modules
-        run: go mod download
-
-      - name: Verify go.sum
-        run: go mod verify
-
-  fmt:
-    name: Format
-    needs: deps
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Check formatting
-        run: |
-          output=$(gofmt -l .)
-          if [ -n "$output" ]; then
-            echo "The following files are not formatted:"
-            echo "$output"
-            exit 1
-          fi
-
-  vet:
-    name: Vet
-    needs: deps
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Run go vet
-        run: go vet ./...
-
-  lint:
-    name: Lint
-    needs: deps
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@latest
-
-      - name: Run staticcheck
-        run: staticcheck ./...
-
-  test:
-    name: Test
-    needs: deps
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Run tests
-        run: go test -race -count=1 -v -coverprofile=coverage.out ./...
+          run-modernize: 'true'
+          run-lint: 'true'
+          run-vulncheck: 'true'
+          run-tests: 'true'
+          verify-tidy: 'true'
+          race-detector: 'true'
+          test-verbose: 'true'
+          test-timeout: '10m'
+          min-coverage: '0'
+          lint-timeout: '5m'
+          vulncheck-timeout: '3m'
 
       - name: Upload coverage reports to Codecov
+        if: always() && steps.ultimate-ci.outputs.test-coverage-file != ''
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: alesr/workerpool
+          files: ${{ steps.ultimate-ci.outputs.test-coverage-file }}

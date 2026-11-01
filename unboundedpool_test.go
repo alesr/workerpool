@@ -92,7 +92,7 @@ func TestPool_Unbounded(t *testing.T) {
 					value:   1,
 					counter: &counter,
 				}
-				pool.Do(context.TODO(), task)
+				_, _ = pool.Do(context.TODO(), task)
 			}(i)
 		}
 
@@ -136,19 +136,23 @@ func TestPool_Unbounded(t *testing.T) {
 			var counter atomic.Int32
 			blocker := make(chan struct{})
 
-			go pool.Do(context.TODO(), testTask{
-				fn: func(_ context.Context) {
-					<-blocker
-				},
-				value: 1, counter: &counter,
-			})
+			go func() {
+				_, _ = pool.Do(context.TODO(), testTask{
+					fn: func(_ context.Context) {
+						<-blocker
+					},
+					value: 1, counter: &counter,
+				})
+			}()
 
 			synctest.Wait()
 
 			for range 5 {
-				go pool.Do(context.TODO(), testTask{
-					value: 1, counter: &counter,
-				})
+				go func() {
+					_, _ = pool.Do(context.TODO(), testTask{
+						value: 1, counter: &counter,
+					})
+				}()
 			}
 			synctest.Wait()
 
