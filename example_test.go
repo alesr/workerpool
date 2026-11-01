@@ -82,7 +82,7 @@ func ExamplePool_TryDo() {
 
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		pool.Do(context.Background(), blockingJob{started: started, release: release})
+		_, _ = pool.Do(context.Background(), blockingJob{started: started, release: release})
 	})
 
 	<-started // the worker is now busy
