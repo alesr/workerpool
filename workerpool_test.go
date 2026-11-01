@@ -76,7 +76,7 @@ func TestPool_GracefulShutdown(t *testing.T) {
 				},
 			}
 
-			go pool.Do(context.TODO(), task1)
+			go func() { _, _ = pool.Do(context.TODO(), task1) }()
 
 			synctest.Wait()
 
@@ -118,20 +118,24 @@ func TestPool_GracefulShutdown(t *testing.T) {
 			var counter atomic.Int32
 			blocker := make(chan struct{})
 
-			go pool.Do(context.TODO(), testTask{
-				fn: func(_ context.Context) {
-					<-blocker
-				},
-				value:   1,
-				counter: &counter,
-			})
+			go func() {
+				_, _ = pool.Do(context.TODO(), testTask{
+					fn: func(_ context.Context) {
+						<-blocker
+					},
+					value:   1,
+					counter: &counter,
+				})
+			}()
 
 			synctest.Wait()
 
 			for range buffered {
-				go pool.Do(context.TODO(), testTask{
-					value: 1, counter: &counter,
-				})
+				go func() {
+					_, _ = pool.Do(context.TODO(), testTask{
+						value: 1, counter: &counter,
+					})
+				}()
 			}
 			synctest.Wait()
 
@@ -167,14 +171,16 @@ func TestPool_GracefulShutdown(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
-			go pool.Do(ctx, testTask{
-				fn: func(ctx context.Context) {
-					<-ctx.Done()
-					close(observed)
-				},
-				value:   1,
-				counter: &counter,
-			})
+			go func() {
+				_, _ = pool.Do(ctx, testTask{
+					fn: func(ctx context.Context) {
+						<-ctx.Done()
+						close(observed)
+					},
+					value:   1,
+					counter: &counter,
+				})
+			}()
 
 			synctest.Wait()
 
@@ -253,12 +259,14 @@ func TestPool_ImmediateShutdown(t *testing.T) {
 			var counter atomic.Int32
 			blocker := make(chan struct{})
 
-			go pool.Do(context.TODO(), testTask{
-				fn: func(_ context.Context) {
-					<-blocker
-				},
-				value: 1, counter: &counter,
-			})
+			go func() {
+				_, _ = pool.Do(context.TODO(), testTask{
+					fn: func(_ context.Context) {
+						<-blocker
+					},
+					value: 1, counter: &counter,
+				})
+			}()
 
 			synctest.Wait()
 
@@ -680,13 +688,15 @@ func TestPool_GracefulShutdownAfterForcefulStop(t *testing.T) {
 			var counter atomic.Int32
 			blocker := make(chan struct{})
 
-			go pool.Do(context.TODO(), testTask{
-				fn: func(_ context.Context) {
-					<-blocker
-				},
-				value:   1,
-				counter: &counter,
-			})
+			go func() {
+				_, _ = pool.Do(context.TODO(), testTask{
+					fn: func(_ context.Context) {
+						<-blocker
+					},
+					value:   1,
+					counter: &counter,
+				})
+			}()
 			synctest.Wait()
 
 			cancel()
@@ -755,7 +765,7 @@ func TestPool_IsClosed(t *testing.T) {
 	t.Run("returns false for new pool", func(t *testing.T) {
 		t.Parallel()
 		pool := New[int](context.TODO(), 1)
-		defer pool.GracefulShutdown()
+		defer func() { _ = pool.GracefulShutdown() }()
 
 		if got := pool.IsClosed(); got {
 			t.Error("expected pool to be open")
@@ -765,7 +775,7 @@ func TestPool_IsClosed(t *testing.T) {
 	t.Run("returns true after GracefulShutdown", func(t *testing.T) {
 		t.Parallel()
 		pool := New[int](context.TODO(), 1)
-		pool.GracefulShutdown()
+		_ = pool.GracefulShutdown()
 
 		if got := pool.IsClosed(); !got {
 			t.Error("expected pool to be closed")
