@@ -82,7 +82,7 @@ func TestPool_Do(t *testing.T) {
 			counter := &atomic.Int32{}
 			blocker := make(chan struct{})
 
-			go _, _ = pool.Do(context.TODO(), testTask{
+			go pool.Do(context.TODO(), testTask{
 				fn: func(_ context.Context) {
 					<-blocker
 				},
@@ -140,7 +140,7 @@ func TestPool_Do(t *testing.T) {
 			var counter atomic.Int32
 			taskDone := make(chan struct{})
 
-			go _, _ = pool.Do(taskCtx, testTask{
+			go pool.Do(taskCtx, testTask{
 				fn: func(ctx context.Context) {
 					<-ctx.Done()
 					close(taskDone)
@@ -220,7 +220,7 @@ func TestPool_Do(t *testing.T) {
 				counter: &counter,
 			}
 
-			go _, _ = pool.Do(context.TODO(), task1)
+			go pool.Do(context.TODO(), task1)
 
 			synctest.Wait()
 
@@ -275,7 +275,7 @@ func TestPool_TryDo(t *testing.T) {
 			blocker := make(chan struct{})
 
 			// Worker picks up task1 and blocks.
-			go _, _ = pool.Do(context.TODO(), testTask{
+			go pool.Do(context.TODO(), testTask{
 				fn: func(_ context.Context) {
 					<-blocker
 				},
@@ -286,7 +286,7 @@ func TestPool_TryDo(t *testing.T) {
 			synctest.Wait()
 
 			// task2 fills the dispatch buffer (size 1).
-			go _, _ = pool.Do(context.TODO(), testTask{
+			go pool.Do(context.TODO(), testTask{
 				value:   2,
 				counter: &counter,
 			})
@@ -330,7 +330,7 @@ func TestPool_WithBufferZero(t *testing.T) {
 		blocker := make(chan struct{})
 
 		// first task blocks the worker
-		go _, _ = pool.Do(context.TODO(), testTask{
+		go pool.Do(context.TODO(), testTask{
 			fn: func(_ context.Context) {
 				<-blocker
 			},
