@@ -1,3 +1,0 @@
-[submodule ".github/ultimate-ci"]
-	path = .github/ultimate-ci
-	url = https://github.com/alesr/ultimate-ci.git

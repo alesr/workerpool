@@ -15,12 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
 
       - name: Run Ultimate CI
         id: ultimate-ci
-        uses: ./.github/ultimate-ci
+        uses: alesr/ultimate-ci@v1
         with:
           run-modernize: 'true'
           run-lint: 'true'
